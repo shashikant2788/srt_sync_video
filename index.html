@@ -53,7 +53,7 @@
 
     video {
       width: 100%;
-      max-height: 40vh;
+      max-height: 60vh;
       border-radius: 6px;
       display: none;
     }
@@ -221,6 +221,15 @@
     target.classList.remove("empty");
   }
 
+  /* 🔽 AUTO-SCROLL HELPER (ADDED) */
+  function scrollCueIntoView(cue) {
+    if (!cue) return;
+    cue.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }
+
   videoPlayer.addEventListener("timeupdate", () => {
     const t = videoPlayer.currentTime;
     let activeIndex = -1;
@@ -237,7 +246,15 @@
     translatedCues.forEach((cue, i) => {
       const active = i === activeIndex;
       cue.classList.toggle("active", active);
-      if (originalCues[i]) originalCues[i].classList.toggle("active", active);
+
+      if (originalCues[i]) {
+        originalCues[i].classList.toggle("active", active);
+      }
+
+      /* 🔽 AUTO-SCROLL (ADDED) */
+      if (active) {
+        scrollCueIntoView(cue);
+      }
     });
   });
 
