@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>SRT Sync Workspace</title>
+  <title>SRT Sync Video</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -42,27 +42,37 @@
       background: #d6ebfb;
     }
 
-    /* FIXED VIDEO ZONE */
+    /* VIDEO ZONE */
     .video-wrapper {
-      position: sticky;
-      top: 0;
       background: #f4f6f8;
       padding: 0 16px 12px;
-      z-index: 10;
     }
 
     video {
       width: 100%;
-      max-height: 60vh;
+      height: 100%;
       border-radius: 6px;
       display: none;
     }
 
-    /* SCROLLABLE TRANSCRIPT ZONE */
+    /* RESIZE BAR */
+    .resizer {
+      height: 8px;
+      cursor: row-resize;
+      background: #ccd1d9;
+      margin: 0 16px;
+      border-radius: 4px;
+    }
+
+    .resizer:hover {
+      background: #b0b7bf;
+    }
+
+    /* TRANSCRIPT ZONE */
     .content {
       flex: 1;
       overflow-y: auto;
-      padding: 0 16px 16px;
+      padding: 16px 16px 16px;
     }
 
     .container {
@@ -89,8 +99,6 @@
       background: #ffffff;
       padding: 12px;
       overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
       line-height: 1.5;
       font-size: 14px;
       color: #2c3e50;
@@ -118,36 +126,30 @@
       content: attr(data-placeholder);
       color: #95a5a6;
     }
-
-    @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-    }
   </style>
 </head>
 
 <body>
 
-<h1>SRT Synchronization Workspace</h1>
+<h1>SRT Synchronization Video by SHASHIKANT VISHWAKARMA</h1>
 
-<div id="dropArea" class="drop-area">
-  Drop ZIP file here
-</div>
+<div id="dropArea" class="drop-area">Drop ZIP file here</div>
 
-<!-- FIXED VIDEO -->
-<div class="video-wrapper">
+<!-- VIDEO -->
+<div id="videoWrapper" class="video-wrapper" style="height: 40vh;">
   <video id="videoPlayer" controls></video>
 </div>
 
-<!-- SCROLLABLE TRANSCRIPTS -->
-<div class="content">
+<!-- RESIZER -->
+<div id="resizer" class="resizer"></div>
+
+<!-- TRANSCRIPTS -->
+<div id="content" class="content">
   <div class="container">
     <div class="panel">
       <label>Original.srt</label>
       <div id="original" class="viewer empty" data-placeholder="Waiting for original.srt"></div>
     </div>
-
     <div class="panel">
       <label>Translated.srt</label>
       <div id="translated" class="viewer empty" data-placeholder="Waiting for translated.srt"></div>
@@ -160,23 +162,40 @@
   const original = document.getElementById("original");
   const translated = document.getElementById("translated");
   const videoPlayer = document.getElementById("videoPlayer");
+  const videoWrapper = document.getElementById("videoWrapper");
+  const resizer = document.getElementById("resizer");
+  const content = document.getElementById("content");
 
   let originalCues = [];
   let translatedCues = [];
   let cueTimes = [];
-  let isSyncing = false;
 
-  function syncScroll(source, target) {
-    if (isSyncing) return;
-    isSyncing = true;
-    const ratio = source.scrollTop / (source.scrollHeight - source.clientHeight || 1);
-    target.scrollTop = ratio * (target.scrollHeight - target.clientHeight);
-    isSyncing = false;
-  }
+  /* -------- RESIZER LOGIC -------- */
+  let isDragging = false;
 
-  original.addEventListener("scroll", () => syncScroll(original, translated));
-  translated.addEventListener("scroll", () => syncScroll(translated, original));
+  resizer.addEventListener("mousedown", () => {
+    isDragging = true;
+    document.body.style.cursor = "row-resize";
+  });
 
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
+    document.body.style.cursor = "default";
+  });
+
+  document.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+
+    const minVideo = 150;
+    const maxVideo = window.innerHeight - 200;
+
+    const newHeight = e.clientY - videoWrapper.getBoundingClientRect().top;
+    if (newHeight > minVideo && newHeight < maxVideo) {
+      videoWrapper.style.height = newHeight + "px";
+    }
+  });
+
+  /* -------- TIME SYNC LOGIC (UNCHANGED) -------- */
   function timeToSeconds(t) {
     const [h, m, s] = t.split(":");
     const [sec, ms] = s.split(",");
@@ -189,72 +208,50 @@
     cueTimes.length = 0;
 
     const blocks = srtText.trim().split(/\n\s*\n/);
-
     blocks.forEach((block, index) => {
       const lines = block.split("\n");
-      if (lines.length >= 3) {
-        const [start] = lines[1].split(" --> ");
-        const text = lines.slice(2).join("\n");
+      if (lines.length < 3) return;
 
-        const cue = document.createElement("div");
-        cue.className = "cue";
+      const [start] = lines[1].split(" --> ");
+      const text = lines.slice(2).join("\n");
 
-        const header = document.createElement("div");
-        header.className = "cue-header";
-        header.innerHTML = `<span>#${index + 1}</span><span>${start}</span>`;
+      const cue = document.createElement("div");
+      cue.className = "cue";
 
-        const body = document.createElement("div");
-        body.textContent = text;
+      cue.innerHTML = `
+        <div class="cue-header">#${index + 1} | ${start}</div>
+        <div>${text}</div>
+      `;
 
-        cue.appendChild(header);
-        cue.appendChild(body);
-
-        const startTime = timeToSeconds(start);
-        cue.dataset.start = startTime;
-
-        target.appendChild(cue);
-        store.push(cue);
-        cueTimes.push(startTime);
-      }
+      cue.dataset.start = timeToSeconds(start);
+      target.appendChild(cue);
+      store.push(cue);
+      cueTimes.push(cue.dataset.start);
     });
 
     target.classList.remove("empty");
   }
 
-  /* 🔽 AUTO-SCROLL HELPER (ADDED) */
   function scrollCueIntoView(cue) {
-    if (!cue) return;
-    cue.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
+    cue.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   videoPlayer.addEventListener("timeupdate", () => {
     const t = videoPlayer.currentTime;
-    let activeIndex = -1;
+    let idx = -1;
 
     for (let i = 0; i < cueTimes.length; i++) {
-      const start = cueTimes[i];
-      const nextStart = cueTimes[i + 1] ?? Infinity;
-      if (t >= start && t < nextStart) {
-        activeIndex = i;
+      if (t >= cueTimes[i] && t < (cueTimes[i + 1] ?? Infinity)) {
+        idx = i;
         break;
       }
     }
 
     translatedCues.forEach((cue, i) => {
-      const active = i === activeIndex;
+      const active = i === idx;
       cue.classList.toggle("active", active);
-
-      if (originalCues[i]) {
-        originalCues[i].classList.toggle("active", active);
-      }
-
-      /* 🔽 AUTO-SCROLL (ADDED) */
-      if (active) {
-        scrollCueIntoView(cue);
-      }
+      if (originalCues[i]) originalCues[i].classList.toggle("active", active);
+      if (active) scrollCueIntoView(cue);
     });
   });
 
@@ -275,16 +272,9 @@
     }
   }
 
-  dropArea.addEventListener("dragover", e => {
-    e.preventDefault();
-    dropArea.classList.add("dragover");
-  });
-
-  dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
-
+  dropArea.addEventListener("dragover", e => e.preventDefault());
   dropArea.addEventListener("drop", async e => {
     e.preventDefault();
-    dropArea.classList.remove("dragover");
     const file = e.dataTransfer.files[0];
     if (file && file.name.toLowerCase().endsWith(".zip")) await handleZip(file);
   });
